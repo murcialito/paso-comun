@@ -1,0 +1,55 @@
+{
+  "esquema": 1,
+  "fuente": "catastro_inspire",
+  "entradas": [
+    {
+      "id": "catastro-inspire-28043-cache-20990101",
+      "fuente": "catastro_inspire",
+      "producto": "Producto sintético",
+      "municipio_ine": "28043",
+      "url": "https://example.invalid/sintetico",
+      "fecha_descarga": "2099-01-01",
+      "licencia": "Licencia sintética de prueba (historia #295)",
+      "publicable": false,
+      "restricciones_uso": [
+        "solo uso interno",
+        "fixture sintética: no es un dato real"
+      ],
+      "sha256": "a66a2638b59134449ed63e88cdc6973ee827b364a5ebfe50c770d2bd6fcf5005",
+      "tamano_bytes": 43,
+      "almacen": {
+        "tipo": "release",
+        "etiqueta": "catastro-inspire-28043-20990101",
+        "adjunto": "catastro-inspire-28043-cache-20990101.tar.gz"
+      },
+      "formato": "fichero",
+      "destino": "raw/catastro/28043/cache.tar.gz",
+      "procedencia": "procedencia/catastro_inspire/catastro-inspire-28043-cache-20990101.procedencia.json",
+      "sustituido_por": null
+    },
+    {
+      "id": "catastro-inspire-28043-candidatos-20990102",
+      "fuente": "catastro_inspire",
+      "producto": "Producto sintético",
+      "municipio_ine": "28043",
+      "url": "https://example.invalid/sintetico",
+      "fecha_descarga": "2099-01-01",
+      "licencia": "Licencia sintética de prueba (historia #295)",
+      "publicable": false,
+      "restricciones_uso": [
+        "solo uso interno",
+        "fixture sintética: no es un dato real"
+      ],
+      "sha256": "40731612d393519f9ce8894e0a22139bce972cb36b00166016106230d200d110",
+      "tamano_bytes": 46,
+      "almacen": {
+        "tipo": "git",
+        "ruta": "derivados/candidatos/28043/2099-01-02-candidatos.geojson"
+      },
+      "formato": "fichero",
+      "destino": "derived/candidatos/interno/28043.geojson",
+      "procedencia": "procedencia/catastro_inspire/catastro-inspire-28043-candidatos-20990102.procedencia.json",
+      "sustituido_por": null
+    }
+  ]
+}

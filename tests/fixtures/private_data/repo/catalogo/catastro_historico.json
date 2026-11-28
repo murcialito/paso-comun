@@ -1,0 +1,80 @@
+{
+  "esquema": 1,
+  "fuente": "catastro_historico",
+  "entradas": [
+    {
+      "id": "catastro-historico-28043-ac-20980101",
+      "fuente": "catastro_historico",
+      "producto": "Producto sintético",
+      "municipio_ine": "28043",
+      "url": "https://example.invalid/sintetico",
+      "fecha_descarga": "2099-01-01",
+      "licencia": "Licencia sintética de prueba (historia #295)",
+      "publicable": false,
+      "restricciones_uso": [
+        "solo uso interno",
+        "fixture sintética: no es un dato real"
+      ],
+      "sha256": "f3a50d1acd46bf1ff42202eb2526669d990a5ed8ba1cb847e78194d4fbd2cb43",
+      "tamano_bytes": 51,
+      "almacen": {
+        "tipo": "release",
+        "etiqueta": "catastro-historico-28043-20980101",
+        "adjunto": "catastro-historico-28043-ac-20980101.7z"
+      },
+      "formato": "fichero",
+      "destino": "raw/catastro_historico/28043/AC.7z",
+      "procedencia": "procedencia/catastro_historico/catastro-historico-28043-ac-20980101.procedencia.json",
+      "sustituido_por": "catastro-historico-28043-ac-20990101"
+    },
+    {
+      "id": "catastro-historico-28043-ac-20990101",
+      "fuente": "catastro_historico",
+      "producto": "Producto sintético",
+      "municipio_ine": "28043",
+      "url": "https://example.invalid/sintetico",
+      "fecha_descarga": "2099-01-01",
+      "licencia": "Licencia sintética de prueba (historia #295)",
+      "publicable": false,
+      "restricciones_uso": [
+        "solo uso interno",
+        "fixture sintética: no es un dato real"
+      ],
+      "sha256": "6aa3806a131b5a8587e1c0b36f71a92f6bac37a1901f334481065baa7f4010d1",
+      "tamano_bytes": 41,
+      "almacen": {
+        "tipo": "release",
+        "etiqueta": "catastro-historico-28043-20990101",
+        "adjunto": "catastro-historico-28043-ac-20990101.7z"
+      },
+      "formato": "fichero",
+      "destino": "raw/catastro_historico/28043/AC.7z",
+      "procedencia": "procedencia/catastro_historico/catastro-historico-28043-ac-20990101.procedencia.json",
+      "sustituido_por": null
+    },
+    {
+      "id": "catastro-historico-28043-tp-20990101",
+      "fuente": "catastro_historico",
+      "producto": "Producto sintético",
+      "municipio_ine": "28043",
+      "url": "https://example.invalid/sintetico",
+      "fecha_descarga": "2099-01-01",
+      "licencia": "Licencia sintética de prueba (historia #295)",
+      "publicable": false,
+      "restricciones_uso": [
+        "solo uso interno",
+        "fixture sintética: no es un dato real"
+      ],
+      "sha256": "89c25274f8ecd5f95b0ba30fb3575c4dcbfa5bbe431d37f82778bdfe88576044",
+      "tamano_bytes": 41,
+      "almacen": {
+        "tipo": "git",
+        "ruta": "derivados/catastro_historico/28043/2099-01-01-tp.txt"
+      },
+      "formato": "fichero",
+      "destino": "raw/catastro_historico/28043/TP.txt",
+      "procedencia": "procedencia/catastro_historico/catastro-historico-28043-tp-20990101.procedencia.json",
+      "sustituido_por": null
+    }
+  ]
+}

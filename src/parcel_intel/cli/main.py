@@ -1,5 +1,6 @@
 import argparse
 import json
+import os
 import sys
 import time
 from collections import Counter
@@ -68,6 +69,7 @@ from parcel_intel.adapters.pnoa.window import PnoaWindowAdapter
 from parcel_intel.adapters.postgis.connection import get_connection
 from parcel_intel.adapters.postgis.georeference_repository import PostgisGeoreferenceRepository
 from parcel_intel.adapters.postgis.rule_repository import PostgisRuleRepository
+from parcel_intel.adapters.private_data import GhCliPrivateDataStore, LocalPrivateDataArea
 from parcel_intel.adapters.public_utility_forests import client as forest_client
 from parcel_intel.adapters.public_utility_forests.adapter import PublicUtilityForestAdapter
 from parcel_intel.adapters.published_layers import (
@@ -162,6 +164,7 @@ from parcel_intel.application.publish_layers import (
     PublishLayersUseCase,
 )
 from parcel_intel.application.read_cadastral_zoning import ReadCadastralZoningUseCase
+from parcel_intel.application.sync_private_data import SyncPrivateDataUseCase
 from parcel_intel.domain.cadastral_road import CadastralRoadLayer
 from parcel_intel.domain.cadastral_zoning import CadastralZoningLayer
 from parcel_intel.domain.candidate_evaluation import (
@@ -196,6 +199,7 @@ from parcel_intel.domain.municipal_public_utility_forests import MunicipalPublic
 from parcel_intel.domain.municipal_road_layer import MunicipalRoadLayerBatch
 from parcel_intel.domain.municipality import HITO_MUNICIPALITY_CODES
 from parcel_intel.domain.parcel import Parcel
+from parcel_intel.domain.private_catalog import SOURCE_RE, PrivateCatalogError, SyncSummary
 from parcel_intel.domain.provenance import Provenance, Redistribution
 from parcel_intel.domain.publication import NotRedistributableError
 from parcel_intel.domain.published_discrepancy import OmittedByLicense
@@ -218,6 +222,8 @@ from parcel_intel.ports.errors import (
     InvalidRuleLayerError,
     MunicipalBoundaryNotFoundError,
     MunicipalBoundaryUnusableError,
+    PrivateDataStoreError,
+    PrivateDataUnavailable,
     RawImageMismatchError,
     RuleProposalNotFoundError,
     TruncatedAreaQueryError,
@@ -246,6 +252,17 @@ REPOSITORY_URL = "https://github.com/murcialito/paso-comun"
 PUBLISH_SIZE_THRESHOLD_BYTES = 3_000_000
 """Por encima de este peso, `publicar-capas` simplifica la geometría (ADR 0036, umbral de
 producto alineado con #86)."""
+
+PRIVATE_DATA_REPO = "murcialito/paso-comun-datos"
+"""Repo privado de datos internos (ADR 0055). Solo lo usa `datos-privados sincronizar`,
+que lanza el fundador desde su terminal; ningún agente ni workflow (ADR 0055 §5)."""
+PRIVATE_DATA_NO_ACCESS = "sin acceso al repo de datos privados; nada que hacer"
+PRIVATE_DATA_REFUSAL = (
+    "la sincronización de datos privados solo la lanza el fundador desde su terminal"
+)
+PRIVATE_DATA_ENV_GUARD = ("CI", "GITHUB_ACTIONS", "CLAUDECODE")
+"""Si cualquiera está definida (aunque sea vacía), el comando se niega (ADR 0059 §5)."""
+PRIVATE_DATA_STORE_FAILURE = "no se pudieron leer los catálogos del repo de datos privados"
 
 
 def _author(args: argparse.Namespace) -> int:
@@ -2054,6 +2071,56 @@ def _historico_evidencia(args: argparse.Namespace) -> int:
     return 0
 
 
+def build_private_data_sync(data_root: Path) -> SyncPrivateDataUseCase:
+    """Composition root de `datos-privados sincronizar` (historia #295, ADR 0059): el
+    almacén sobre el `gh` del usuario y la zona local `data_root`. No crea nada."""
+    return SyncPrivateDataUseCase(
+        store=GhCliPrivateDataStore(PRIVATE_DATA_REPO),
+        area=LocalPrivateDataArea(data_root),
+    )
+
+
+def _private_data_guard_active() -> bool:
+    return any(name in os.environ for name in PRIVATE_DATA_ENV_GUARD)
+
+
+def _source_argument(value: str) -> str:
+    if not SOURCE_RE.fullmatch(value):
+        raise argparse.ArgumentTypeError("fuente no válida (^[a-z0-9_]{1,64}$)")
+    return value
+
+
+def _print_sync_summary(summary: SyncSummary) -> None:
+    for result in summary.results:
+        reason = f" ({result.reason})" if result.reason else ""
+        print(f"{result.entry_id}: {result.outcome.value}{reason}")
+    print(
+        f"resumen: {summary.downloaded} descargados, {summary.present} ya estaban, "
+        f"{summary.skipped} saltados, {summary.failed} fallidos"
+    )
+
+
+def _datos_privados_sincronizar(args: argparse.Namespace) -> int:
+    if _private_data_guard_active():
+        print(PRIVATE_DATA_REFUSAL, file=sys.stderr)
+        return 1
+    use_case = build_private_data_sync(args.datos)
+    sources = frozenset(args.fuente) if args.fuente else None
+    try:
+        summary = use_case.execute(sources)
+    except PrivateDataUnavailable:
+        print(PRIVATE_DATA_NO_ACCESS)
+        return 0
+    except PrivateCatalogError as error:
+        print(f"catálogo no válido: {error}", file=sys.stderr)
+        return 1
+    except PrivateDataStoreError:
+        print(PRIVATE_DATA_STORE_FAILURE, file=sys.stderr)
+        return 1
+    _print_sync_summary(summary)
+    return 1 if summary.failed else 0
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="parcel_intel.cli.main")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -2732,6 +2799,30 @@ def _build_parser() -> argparse.ArgumentParser:
         "--sin-red", action="store_true", help="Solo las cachés; un hueco es un fallo"
     )
     evidencia_parser.set_defaults(func=_historico_evidencia)
+
+    privados_parser = subparsers.add_parser(
+        "datos-privados",
+        help="Datos internos no publicables del repo privado (ADR 0055); solo el fundador",
+    )
+    privados_subparsers = privados_parser.add_subparsers(dest="privados_command", required=True)
+    sincronizar_parser = privados_subparsers.add_parser(
+        "sincronizar",
+        help="Bajar a data/ los ficheros del catálogo y comprobar su sha256 (historia #295)",
+    )
+    sincronizar_parser.add_argument(
+        "--datos",
+        type=Path,
+        default=Path("data"),
+        help="Raíz local de los datos; el destino del catálogo es relativo a ella",
+    )
+    sincronizar_parser.add_argument(
+        "--fuente",
+        action="append",
+        default=[],
+        type=_source_argument,
+        help="Solo las entradas de esta fuente (repetible); sin ella, todas",
+    )
+    sincronizar_parser.set_defaults(func=_datos_privados_sincronizar)
 
     return parser
 

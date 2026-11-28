@@ -231,6 +231,19 @@ uv run python -m parcel_intel.cli.main historico cargar 280075-w1 --curated test
 # <curated>/<unit_id>/evidencia/. Los aprobados y rechazados no se tocan. Sin base de datos. Sale con 1, sin escribir, si la unidad no es
 # aceptable o tiene aprobaciones caducadas. La imagen de trabajo sale de --cache y PNOA de --cache-pnoa; --sin-red: solo desde las cachés.
 uv run python -m parcel_intel.cli.main historico evidencia <unit_id> [--curated curated/historico] [--cache data/raw/ign_planimetrias] [--cache-pnoa data/raw/pnoa_ma] [--sin-red]
+
+# Sincronización de bajada de los datos privados (historia #295, ADR 0055 y 0059). SOLO la lanza el fundador desde su terminal: ningún agente (ni en
+# Actions ni en local) y ningún workflow la ejecuta. Lee con el `gh` del usuario (>= 2.28, sesión de `gh auth login`; el comando no lee ni pasa credenciales)
+# todos los catálogos del repo privado, los valida enteros antes de descargar nada (lista blanca de claves, rutas bajo raw/ o derived/, sin titularidad ni
+# referencias catastrales; los mensajes nombran fichero, posición y campo, nunca el valor) y baja cada fichero a data/<destino>, comprobando tamaño y sha256 en
+# una zona de preparación (data/privados/.preparacion, se borra siempre) antes de colocarlo. Nunca sobrescribe: no sobrescribe un fichero ni un registro
+# distintos del catálogo (fallo de esa entrada); uno idéntico que ya estaba cuenta «ya estaba» y solo se baja su procedencia. La procedencia y la entrada
+# quedan en data/privados/<id>.json (sin fecha: repetir da los mismos bytes). Una línea `<id>: descargado|ya estaba|saltado|fallo (motivo)` por entrada y
+# `resumen: ...`; un fallo no frena las demás y sale con 1. Saltadas: sustituidas, fuentes no pedidas con --fuente, `formato: tar` y `partes` (pendientes de #320).
+# Sin acceso (sin gh, sin sesión, sin permisos): imprime solo «sin acceso al repo de datos privados; nada que hacer» y sale con 0. Si `CI`, `GITHUB_ACTIONS` o
+# `CLAUDECODE` están definidas (aunque vacías), se niega y sale con 1 sin llamar a gh. El test real (tests/adapters/private_data/test_gh_store_integration.py,
+# `integration` + `fuera_de_ci`) solo lo pasa el fundador con PASO_COMUN_DATOS_PRIVADOS=1.
+uv run python -m parcel_intel.cli.main datos-privados sincronizar [--datos data] [--fuente catastro_historico ...]
 ```
 
 ## Contexto de negocio (resumen)

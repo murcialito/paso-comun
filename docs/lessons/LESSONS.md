@@ -979,6 +979,14 @@ Lectura obligatoria antes de empezar cualquier historia. Lecciones accionables, 
   - **Causa**: el CA10 de #294 dejó en rojo el CI de `main` tras fusionar la PR #312 (2026-11-28); el CA8 de #287 tenía el mismo patrón.
   - **Aplica a**: implementación y revisión (tests que inspeccionan el historial de git).
 
+## [2026-11-28] Historia #295 — Sincronización de los datos privados
+
+- **Lección**: un comando que se niega si hay `CI`, `GITHUB_ACTIONS` o `CLAUDECODE` en el entorno hace que **todos** sus tests salgan por la guarda en CI y en la sesión del propio agente (las dos variables están definidas). Una fixture `autouse` del módulo de tests borra las tres con `monkeypatch.delenv`, y solo los tests de la guarda las vuelven a poner. Sin eso, los tests pasan en el portátil y fallan en CI, o al revés.
+  - **Aplica a**: implementación (comandos con guarda de entorno).
+- **Lección**: para que el `stderr` de un CLI externo (aquí `gh`, que puede nombrar el repo privado) nunca llegue a un log, el adapter lo captura siempre y lanza errores de port con **textos fijos**. El test lo prueba con un ejecutor falso cuyo `stderr` lleva el nombre del repo y un centinela, y busca los dos en stdout y stderr del comando. Un test estático sobre el fichero del adapter (`token`, `shell=True`, `env=`) obliga además a no escribir esas palabras ni en los comentarios.
+  - **Aplica a**: implementación y revisión (adapters sobre CLIs con sesión del usuario).
+- **Lección**: las fixtures con sha256 «calculados en el test, no copiados a mano» se generan con un `generar.py` que escribe los bytes y el catálogo a la vez, y un test compara lo versionado con lo que da el generador. Así el hash nunca se copia y un cambio de bytes sin regenerar falla en CI.
+  - **Aplica a**: implementación (fixtures que declaran la huella de otros ficheros).
 ## [2026-11-28] Historia #315 — Tabla de convergencia en los tramos a verificar
 
 - **Lección**: cuando un comando gana opciones con valor por defecto bajo `data/` o `curated/` (aquí `--capas data/derived`, `--curated-historico curated/historico`), los tests que lo invocan por la CLI siguen en verde sin tocarlos si esos directorios no existen en el clon: pasan por accidente, y en el portátil de alguien con datos reales leerían otra cosa. Se buscan con `grep` todos los ayudantes que llaman al comando (aquí `_publicar` de #170 y #172 y `generar_idem.py` de #208) y se les pasan directorios de la fixture o inexistentes en `tmp_path`, de forma explícita.

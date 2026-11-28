@@ -442,3 +442,29 @@ class HistoricCoverageError(Exception):
         super().__init__(f"Cobertura histórica: la unidad {unit_id} no es utilizable: {reason}")
         self.unit_id = unit_id
         self.reason = reason
+
+
+class PrivateDataUnavailable(Exception):
+    """Sin acceso al repo de datos privados: sin `gh`, sin sesión o sin permisos
+    (historia #295, ADR 0059). El mensaje es fijo: ni repo, ni rutas, ni `stderr` de `gh`."""
+
+    def __init__(self) -> None:
+        super().__init__("sin acceso al repo de datos privados")
+
+
+class PrivateDataStoreError(Exception):
+    """Cualquier otro fallo del almacén de datos privados (red, 5xx, tiempo agotado,
+    respuesta ilegible) -- historia #295. El motivo es un texto fijo del adapter."""
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(f"fallo del almacén de datos privados: {reason}")
+        self.reason = reason
+
+
+class PrivateDataConflictError(Exception):
+    """Lo que hay en `data/` no es lo del catálogo (fichero o registro distintos, enlace
+    simbólico, ruta fuera de `data/`): no se sustituye nada -- historia #295."""
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(f"conflicto con lo local: {reason}")
+        self.reason = reason
