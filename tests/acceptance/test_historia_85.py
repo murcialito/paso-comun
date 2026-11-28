@@ -368,6 +368,7 @@ _INDICIO_PROPS = {
     "criterio",
     "descripcion_criterio",
     "aviso_omision",
+    "convergencia",  # #316: tabla de convergencia; nada más nuevo (CA13)
 }
 _PROHIBIDAS = re.compile(r"catastr|titular|propietari|refcat|referencia_catastral", re.IGNORECASE)
 

@@ -69,6 +69,7 @@ from parcel_intel.domain.published_discrepancy import CADASTRAL_REFERENCE_RE, PA
 from tests.convergence_support import candidate_tables
 from tests.fixtures.candidatos_publicar import generar
 from tests.fixtures.candidatos_revision import generar as revision
+from tests.indicio_publication_support import indicio_publication_options
 from tests.medir_candidatos_support import caso
 
 pytestmark = pytest.mark.acceptance
@@ -638,6 +639,8 @@ def test_ca11_indice_conserva_las_cuatro_capas_en_cualquier_orden(
     capas = ["publicar-capas", "--entrada", str(DISCREPANCY_FIXTURES), "--municipio", INE]
     indicios = ["publicar-discrepancias", "--entrada", str(derived / "publicable")]
     indicios += ["--municipio", INE, "--salida", str(site)]
+    # Desde #316: interno, manifiesto de indicios (productor real), capas y histórico vacío.
+    indicios += indicio_publication_options(derived / "publicable", DISCREPANCY_FIXTURES)
     assert _run([*capas, "--salida", str(site)]) == 0
     assert _run(indicios) == 0
     expected = {"camino_actual", "candidatos", "discrepancias", "vias_pecuarias"}

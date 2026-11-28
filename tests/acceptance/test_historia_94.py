@@ -53,7 +53,9 @@ from parcel_intel.domain.published_discrepancy import (
     build_discrepancy_layer,
 )
 from parcel_intel.domain.published_layers import PUBLISHED_LAYERS
+from tests.convergence_support import indicio_tables
 from tests.fixtures.published_layers import write_real_derived_layers
+from tests.indicio_publication_support import indicio_publication_options
 from tests.network_guard import no_network
 
 pytestmark = pytest.mark.acceptance
@@ -75,6 +77,7 @@ FEATURE_KEYS = {
     "criterio",
     "descripcion_criterio",
     "aviso_omision",
+    "convergencia",  # #316: la lista blanca solo crece en la tabla de convergencia
 }
 EVIDENCE_KEYS = {
     "papel",
@@ -122,9 +125,19 @@ def _discrepancias(entrada: Path, salida: Path, *codes: str) -> int:
     )
 
 
-def _publicar(entrada: Path, salida: Path, *args: str) -> int:
+def _publicar(entrada: Path, salida: Path, *args: str, capas: Path = FIXTURES) -> int:
+    """Desde #316 también pasa el interno, el manifiesto de indicios (generado con el
+    productor real), las capas y `curated/historico/` a `tmp_path` (CA10 de #316)."""
     return _run(
-        ["publicar-discrepancias", "--entrada", str(entrada), "--salida", str(salida), *args]
+        [
+            "publicar-discrepancias",
+            "--entrada",
+            str(entrada),
+            "--salida",
+            str(salida),
+            *indicio_publication_options(entrada, capas),
+            *args,
+        ]
     )
 
 
@@ -323,12 +336,20 @@ def test_ca3_ni_confianza_numerica_ni_referencias_ni_ids_ni_catastro(
             if mentions:
                 assert item["papel"] == "contraparte"
                 assert item["atribucion"] == CATASTRO_ATTRIBUTION
-        # Fuera de la evidencia, solo el rótulo público de la fuente en el texto aprobado.
-        rest = {k: v for k, v in feature["properties"].items() if k != "evidencia"}
+        # Fuera de la evidencia y de la tabla, solo el rótulo público de la fuente en el texto
+        # aprobado. La tabla (#316) se acota aparte: Catastro solo en su propia fila.
+        rest = {
+            k: v for k, v in feature["properties"].items() if k not in {"evidencia", "convergencia"}
+        }
         rest_text = json.dumps(rest, ensure_ascii=False).replace(
             "trazado derivado de datos del Catastro", ""
         )
         assert "catastr" not in rest_text.casefold()
+        for row in feature["properties"]["convergencia"]["filas"]:
+            if row["fuente"] != "catastro_vt":
+                assert "catastr" not in json.dumps(row, ensure_ascii=False).casefold(), row
+            elif row["valor"] != "sin_cobertura":
+                assert row["atribucion"] == [CATASTRO_ATTRIBUTION]
 
     # Ninguna geometría de Catastro: ningún vértice publicado es de C-2 (solo Catastro).
     from parcel_intel.adapters.published_layers.projection import to_lonlat
@@ -378,12 +399,17 @@ def test_ca5_procedencia_publicable_con_atribuciones_e_indice(pipeline: dict[str
         assert isinstance(sidecar[field], str) and sidecar[field]
     assert sidecar["licencia"] == "CC BY 4.0"
     assert sidecar["capa"] == "discrepancias" and sidecar["municipio"] == "28043"
-    cited = {
-        e["atribucion"]
-        for f in _features(site / "discrepancias" / "28043.geojson")
-        for e in f["properties"]["evidencia"]
+    features = _features(site / "discrepancias" / "28043.geojson")
+    cited = {e["atribucion"] for f in features for e in f["properties"]["evidencia"]}
+    # Desde #316 se suman las atribuciones de las filas de la tabla de convergencia.
+    rows = {
+        a
+        for f in features
+        for r in f["properties"]["convergencia"]["filas"]
+        for a in r["atribucion"]
     }
-    assert set(sidecar["atribucion"]) == cited
+    assert rows
+    assert set(sidecar["atribucion"]) == cited | rows
     assert IGN_ATTRIBUTION in cited and CATASTRO_ATTRIBUTION in cited
     assert {f["origen"] for f in sidecar["fuentes"]} == {
         "SINTÉTICO capa de vías pecuarias",
@@ -427,7 +453,7 @@ def test_ca7_ambito_publica_los_7_sin_red(
             == 0
         )
         capsys.readouterr()
-        assert _publicar(derived / "publicable", site, "--ambito") == 0
+        assert _publicar(derived / "publicable", site, "--ambito", capas=real) == 0
     out = capsys.readouterr().out
     for code in AMBITO:
         published = f"publicado {site / 'discrepancias' / f'{code}.geojson'} " in out
@@ -666,7 +692,9 @@ def test_ca15_datos_reales_de_colmenar_en_el_repo() -> None:
     text = path.read_text(encoding="utf-8")
     assert CADASTRAL_REFERENCE_RE.search(text) is None
     for feature in document["features"]:
-        assert set(feature["properties"]) == FEATURE_KEYS
+        # Los ficheros de `site/datos/` se regeneran con la tabla después de fusionar #316
+        # (fuera de su alcance): valen con y sin `convergencia`, y nada más.
+        assert FEATURE_KEYS - {"convergencia"} <= set(feature["properties"]) <= FEATURE_KEYS
         assert feature["properties"]["texto"].startswith("Indicio a verificar:")
         assert banned_words_in(json.dumps(feature, ensure_ascii=False)) == ()
     (entry,) = [m for m in _load(SITE_DATOS / "indice.json")["municipios"] if m["ine"] == "28043"]
@@ -770,7 +798,7 @@ def _synthetic_report() -> MunicipalDiscrepancyReport:
 def test_oraculo_de_publicacion_coincide_con_el_dominio(pipeline: dict[str, Any]) -> None:
     """Apoyo de CA1/CA4/CA10: el oráculo fijado a mano (LEEME.md) es lo que da el dominio."""
     report = GeoJsonDiscrepancyReportReader(pipeline["derived"] / "publicable").get_report("28043")
-    build = build_discrepancy_layer(report)
+    build = build_discrepancy_layer(report, indicio_tables(report))
     assert build.publication is not None
     kinds = sorted(item.card.kind for item in build.publication.content.items)
     assert kinds == ["AUSENTE_EN_FUENTE"] * 3 + ["DESPLAZAMIENTO"]

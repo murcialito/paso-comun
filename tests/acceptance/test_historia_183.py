@@ -42,6 +42,7 @@ from parcel_intel.domain.geometry import Geometry
 from parcel_intel.domain.published_discrepancy import public_indicio_id
 from parcel_intel.domain.road_segment import RoadSurface
 from tests.cut_signal_support import ORDINARY, Boundaries, ParcelsPort, Sink, parcel, rect
+from tests.indicio_publication_support import indicio_publication_options
 from tests.road_layer_fixtures import prepare_road_batches, recorte_for
 
 pytestmark = pytest.mark.acceptance
@@ -658,6 +659,8 @@ def test_ca8_colmenar_con_red_los_solapes_sobre_asfalto_desaparecen_y_el_desplaz
                 str(tmp_path / "discrepancias" / "publicable"),
                 "--salida",
                 str(site),
+                # Desde #316: interno, manifiesto (productor real, red falsa), capas e histórico.
+                *indicio_publication_options(tmp_path / "discrepancias" / "publicable", derived),
             ]
         )
         == 0
@@ -756,6 +759,8 @@ def test_ca9_recuento_de_indicios_del_ambito_anotado(tmp_path: Path) -> None:
                 str(out / "publicable"),
                 "--salida",
                 str(site),
+                # Desde #316: interno, manifiesto (productor real, red falsa), capas e histórico.
+                *indicio_publication_options(out / "publicable", derived, work=tmp_path),
             ]
         )
         == 0

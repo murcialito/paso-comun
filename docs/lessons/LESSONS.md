@@ -994,3 +994,13 @@ Lectura obligatoria antes de empezar cualquier historia. Lecciones accionables, 
   - **Aplica a**: implementación y revisión (campos de texto libre en `curated/`).
 - **Lección**: el prefijo de un municipio es una constante de dominio (`MUNICIPALITY_PREFIXES`) fijada por el fundador; el código se normaliza al formatear (`:03d`), así que se rechazan los ceros de más (`COL-0001`) para que lo que se lee sea lo que se imprime.
   - **Aplica a**: implementación (identificadores humanos que se muestran tal cual).
+
+## [2026-11-28] Historia #316 — Tabla de convergencia en los indicios
+
+- **Lección**: un diseño que pide que el módulo A importe el B no comprueba si B ya importa A. Aquí `published_discrepancy` tenía que importar `published_convergence`, que tomaba de él `CADASTRAL_REFERENCE_RE`. Un ciclo así no siempre salta: depende de qué módulo se importe primero, así que fallaría con `ImportError` («partially initialized module») solo en algunos órdenes de importación. Se vio con `grep` antes de escribir el import. Se resuelve moviendo lo compartido a un módulo hoja (`domain/parcel_identifiers.py`); el módulo antiguo lo reexporta con alias explícito (lección de #22). No se arregla con imports dentro de funciones.
+  - **Aplica a**: arquitecto e implementación (antes de añadir un import entre dos módulos de `domain/`, `grep` del import inverso).
+- **Lección**: cambiar un id de prueba inventado (`"r"`, `"rec-VP-1"`) por uno con la forma real deja de ser cosmético en cuanto otra entidad lo valida. `ConvergenceStretch` exige 16 hexadecimales, y los tests de #94 usaban ids libres. Un ayudante de test que «salta lo que no puede calcular» con `except ValueError` escondió el motivo: el fallo salió lejos, como «sin tabla de convergencia». Los ayudantes saltan solo el caso que conocen (zona vacía) y dejan propagar el resto.
+  - **Aplica a**: implementación (fixtures en memoria: ids con la forma real desde el principio; ayudantes sin `except` amplios).
+- **Lección**: el cálculo de la tabla de #240 sobre las capas reales grabadas es caro (`compare_trail` → `distance_point_to_shape`: unos 98 millones de distancias punto-segmento en el `--ambito` del CA7 de #94, que pasa de 1,5 s a 42 s). Un test de «todo el ámbito» que antes solo publicaba ahora calcula la tabla. Antes de añadir un cálculo a un comando que ya se prueba con `--ambito` sobre datos reales, medir el test (`--durations`) y anotarlo en la PR. Si se optimiza, es una historia aparte del dominio de #240.
+  - **Aplica a**: implementación y arquitecto (comandos que ganan un cálculo geométrico por elemento).
+

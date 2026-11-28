@@ -41,3 +41,13 @@ Omite **1**: el `AUSENTE_EN_FUENTE` Catastro → IGN de `99043A00109002` (lado A
 Catastro, zona redactada). Contraparte: 0.
 
 28045 no publica nada y omite 1 (lado A).
+
+## Uso en #316 (tabla de convergencia)
+
+Desde #316, `publicar-discrepancias` lee también el informe **interno** que `discrepancias`
+escribe junto al publicable, el manifiesto de `imagenes-comparacion-indicios` y estas mismas
+capas como capas de la tabla (`--capas`). Los tests no versionan ni el manifiesto ni las
+imágenes: los genera en `tmp_path` el productor real, con un `http_get` falso
+(`tests/indicio_publication_support.py`). La cobertura histórica sale vacía (directorios que
+no existen). Los cuatro indicios publicados de 28043 llevan su tabla; el oráculo de #94 no
+cambia.

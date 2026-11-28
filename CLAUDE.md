@@ -119,7 +119,15 @@ uv run python -m parcel_intel.cli.main publicar-cobertura --municipio 28043 [--m
 # Publicar los indicios de discrepancia en site/datos/discrepancias/<ine>.geojson con la ficha de #16 (historia #94, ADR 0044): lee
 # data/derived/discrepancias/publicable/<ine>.geojson (regenerarlo con `discrepancias` si es anterior a #94), EPSG:4326, cada fichero con su
 # .procedencia.json, y el índice. Sin red. Todo o nada: sale con 1 y no escribe si un municipio falta o no es publicable; uno sin indicios publicables se informa como vacío.
-uv run python -m parcel_intel.cli.main publicar-discrepancias --municipio 28043 [--municipio ...]
+# Tabla de convergencia (historia #316, ADR 0057): cada indicio lleva `convergencia` y el .procedencia.json su bloque `convergencia`. Orden:
+# `discrepancias` → `imagenes-comparacion-indicios` → `publicar-discrepancias`. Lee el informe INTERNO casado (--interno; nunca se publica), el
+# manifiesto de indicios (--comparacion), las capas derivadas (--capas) y --curated-historico con --cache-historico, sin red; solo si el publicable
+# pasa las reglas de #94 y tiene algún indicio publicable (un municipio vacío no lee nada más). Un interno ausente, redactado o que no casa, sin
+# manifiesto, un indicio ausente o incoherente, una franja `fallo`, una capa ilegible, una unidad histórica no utilizable o una fila inválida salen
+# con 1 (`ERROR <ine>: [indicio <public_id>: ]tabla de convergencia: <motivo>` o el motivo del municipio; nunca un record_id). Un indicio demasiado
+# largo sale con la tabla sin filas de ortofoto («Imagen no disponible»). Por encima de 3.000.000 bytes falla sin escribir. --umbral-aparece como en
+# `publicar-candidatos`; las unidades con veredicto negativo se omiten y se informan (`unidad histórica omitida <id>: …`).
+uv run python -m parcel_intel.cli.main publicar-discrepancias --municipio 28043 [--municipio ...] [--entrada data/derived/discrepancias/publicable] [--interno data/derived/discrepancias/interno] [--comparacion data/derived/comparacion_indicios] [--capas data/derived] [--curated-historico curated/historico] [--cache-historico data/raw/ign_planimetrias] [--umbral-aparece 0.5] [--salida site/datos]
 uv run python -m parcel_intel.cli.main publicar-discrepancias --ambito
 
 # Kit de campo (historia #213): exporta lo ya publicado en site/datos/<capa>/<ine>.geojson (vias_pecuarias, camino_actual, discrepancias y, si existe,

@@ -31,11 +31,13 @@ from parcel_intel.domain.convergence import (
     PreparedLayer,
     StretchNotComputableError,
     build_convergence_table,
+    image_axis,
     stretch_from_candidate,
+    stretch_from_discrepancy,
 )
 from parcel_intel.domain.cut_candidate import CutCandidate
 from parcel_intel.domain.discrepancy import SourceRef
-from parcel_intel.domain.discrepancy_report import TrailLayer
+from parcel_intel.domain.discrepancy_report import MunicipalDiscrepancyReport, TrailLayer
 from parcel_intel.domain.geometry import Geometry, LineGeometry, MultiLineGeometry, Point
 from parcel_intel.domain.historic_coverage import HistoricCoverage, HistoricUnitCoverage
 from parcel_intel.domain.historic_trail import HistoricDocumentKind, HistoricTrail
@@ -278,6 +280,34 @@ def candidate_tables(
         except StretchNotComputableError as error:
             failures[candidate.candidate_id] = error.reason
     return tables, failures
+
+
+def indicio_tables(
+    report: MunicipalDiscrepancyReport,
+    appears_min_fraction: float = APPEARS_MIN_FRACTION,
+) -> dict[str, ConvergenceTable]:
+    """Tablas de convergencia (historia #316) de los registros con zona de `report`, por
+    `record_id`: sin capas ni cobertura histórica y con imágenes coherentes con el trazo de
+    cada zona (`comparison_for(image_axis(zona))`). Vale para el informe publicable: sus
+    registros sin redactar llevan la misma zona que el interno."""
+    tables: dict[str, ConvergenceTable] = {}
+    for record in report.records:
+        if record.zone_redacted:
+            continue
+        zone = record.discrepancy.zone
+        if not any(zone.rings if isinstance(zone, Geometry) else zone.lines):
+            continue  # zona vacía: el dominio la rechaza antes de mirar la tabla
+        tramo = stretch_from_discrepancy(record, report.municipality_code)
+        axis = image_axis(tramo.shape)
+        tables[record.record_id] = build_convergence_table(
+            tramo,
+            CONVERGENCE_ROW_SOURCES,
+            {},
+            empty_coverages(),
+            comparison_for(axis, stretch_id=record.record_id),
+            appears_min_fraction,
+        )
+    return tables
 
 
 # --- Dobles de los ports. ---------------------------------------------------------------

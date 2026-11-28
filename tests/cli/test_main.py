@@ -410,6 +410,31 @@ def test_publicar_discrepancias_ambito_sin_repetidos_y_rutas_por_defecto(
     assert fake.calls == [list(main.AMBITO_HITO_INE)]
     assert args.entrada == Path("data/derived/discrepancias/publicable")
     assert args.salida == Path("site/datos")
+    # Opciones de #316, con los mismos valores por defecto que `publicar-candidatos`.
+    assert args.interno == Path("data/derived/discrepancias/interno")
+    assert args.comparacion == Path("data/derived/comparacion_indicios")
+    assert args.capas == Path("data/derived")
+    assert args.curated_historico == Path("curated/historico")
+    assert args.cache_historico == Path("data/raw/ign_planimetrias")
+    assert args.umbral_aparece == 0.5
+
+
+@pytest.mark.parametrize("value", ["0", "1.5", "nan", "-1"])
+def test_publicar_discrepancias_umbral_no_valido_sale_con_1_sin_leer_nada(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], value: str
+) -> None:
+    def no_debe_llamarse(*args: object, **kwargs: object) -> object:
+        raise AssertionError("no debe construir nada")
+
+    monkeypatch.setattr(main, "build_publish_discrepancies_use_case", no_debe_llamarse)
+    monkeypatch.setattr(main, "build_historic_coverage_source", no_debe_llamarse)
+    args = main._build_parser().parse_args(
+        ["publicar-discrepancias", "--municipio", "28043", "--umbral-aparece", value]
+    )
+    assert args.func(args) == 1
+    out = capsys.readouterr()
+    assert out.err.splitlines() == ["ERROR --umbral-aparece: debe estar en (0, 1]"]
+    assert out.out == ""
 
 
 # --- publicar-candidatos (#315) -----------------------------------------------------------

@@ -26,6 +26,7 @@ from parcel_intel.domain.published_comparison import (
     ComparisonNotPublishableError,
     build_published_comparison,
 )
+from tests.convergence_support import indicio_tables
 from tests.fixtures.candidatos_publicar import generar_idem
 from tests.indicio_comparison_support import (
     INE,
@@ -208,7 +209,9 @@ def test_ca3_indicio_no_publicable_no_entra_ni_genera_peticiones(
     # La franja excluida (en Y0) tampoco genera peticiones: solo las de Y0 + 1000.
     assert min(_requested_min_ys(http)[restricted_start:]) >= Y0 + 500
     # La misma función decide en la capa publicada.
-    layer = published_discrepancy.build_discrepancy_layer(redact_for_publication(_mixed_report()))
+    publishable = redact_for_publication(_mixed_report())
+    # Desde #316 la capa lleva la tabla de convergencia de cada indicio publicado.
+    layer = published_discrepancy.build_discrepancy_layer(publishable, indicio_tables(publishable))
     assert layer.omitted.counterpart == 1 and layer.omitted.subject == 1
 
 

@@ -185,3 +185,24 @@ Datos que pesan en la decisión (ficheros publicados el 2026-11-28):
   protegido por su huella.
 - Los rótulos de fila (`LAYER_ROW_LABEL`, `ORTHOPHOTO_ROW_LABEL`) los aprobó el fundador el
   2026-11-27 en #240 (https://github.com/murcialito/paso-comun/issues/240#issuecomment-7224620545).
+
+## Nota de implementación (#316)
+
+- `publicar-discrepancias` lee el informe interno solo si el publicable tiene algún indicio
+  publicable y ha pasado las reglas de #94: así sus mensajes no cambian y un municipio
+  «vacío» no necesita informe interno, manifiesto ni capas.
+- `public_id` y la selección de lo que se publica salen de un único recorrido
+  (`_publishable_records`), que usan `published_indicio_ids` y `build_discrepancy_layer`.
+- La comprobación de casado compara municipio, `criterion_id`, la secuencia de `record_id`
+  y, por indicio publicado, la zona y las fuentes A y B. Cualquier diferencia da el mismo
+  motivo fijo, sin ids.
+- Los motivos heredados de #172 que mandan a `imagenes-comparacion` se reescriben a
+  `imagenes-comparacion-indicios` en los indicios.
+- La `atribucion` de la capa y del `.procedencia.json` de los indicios suma las atribuciones
+  de las filas de la tabla (todas de la lista cerrada `ROW_ATTRIBUTIONS`).
+- El sink de indicios aplica las mismas barreras que el de candidatos (referencias y
+  localizadores de parcela, palabras vetadas) también a `indice.json` y su procedencia.
+- Añadido en la implementación (no estaba en el diseño): `CADASTRAL_REFERENCE_RE` y
+  `PARCEL_LOCATOR_RE` pasan a `domain/parcel_identifiers.py`, porque
+  `published_convergence` las importaba de `published_discrepancy`, que ahora importa
+  `published_convergence` (ciclo). `published_discrepancy` las reexporta con su nombre.

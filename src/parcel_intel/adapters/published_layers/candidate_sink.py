@@ -24,6 +24,7 @@ from parcel_intel.adapters.published_layers.convergence import (
     convergence_sidecar,
 )
 from parcel_intel.adapters.published_layers.discrepancy_sink import (
+    check_no_banned_words,
     check_no_parcel_identifiers,
     evidence_document,
 )
@@ -47,7 +48,7 @@ from parcel_intel.adapters.published_layers.projection import DECIMALS, SOURCE_C
 from parcel_intel.adapters.road_layer_files.common import write_atomic
 from parcel_intel.domain.provenance import Provenance, Redistribution
 from parcel_intel.domain.public_candidate_card import CANDIDATE_LAYER_NAME
-from parcel_intel.domain.public_card import WARNING, PublicSource, banned_words_in
+from parcel_intel.domain.public_card import WARNING, PublicSource
 from parcel_intel.domain.published_candidate import (
     CANDIDATE_LAYER_ID,
     CANDIDATE_LAYER_LICENSE,
@@ -281,14 +282,6 @@ def sidecar_document(
     }
 
 
-def _check_no_banned_words(label: str, text: str) -> None:
-    found = banned_words_in(text)
-    if found:
-        raise PublishedLayerError(
-            f"{label}: contiene palabras vetadas ({', '.join(found)}); no se publica nada"
-        )
-
-
 @dataclass(frozen=True)
 class _Serialized:
     file: PublishedFile
@@ -327,7 +320,7 @@ class GeoJsonPublishedCandidateSink:
             (INDEX_FILENAME + PROVENANCE_SUFFIX, index_provenance_text),
         ):
             check_no_parcel_identifiers(label, text)
-            _check_no_banned_words(label, text)
+            check_no_banned_words(label, text)
 
         for item in serialized:
             relative = Path(item.file.path)
@@ -354,7 +347,7 @@ class GeoJsonPublishedCandidateSink:
         sidecar = dump_provenance(sidecar_document(publication, provenance))
         for name, content in ((label, text), (label + PROVENANCE_SUFFIX, sidecar)):
             check_no_parcel_identifiers(name, content)
-            _check_no_banned_words(name, content)
+            check_no_banned_words(name, content)
         size = len(text.encode("utf-8"))
         if size > self._threshold:
             raise PublishedLayerError(

@@ -1,18 +1,25 @@
-"""Sink de indicios publicados: `site/datos/discrepancias/<ine>.geojson` (historia #94,
-ADR 0044).
+"""Sink de indicios publicados: `site/datos/discrepancias/<ine>.geojson` (historias #94 y
+#316, ADR 0044 y 0057).
 
 Mismo formato que las capas de trazados (ADR 0036): GeoJSON RFC 7946 en EPSG:4326,
 compacto y determinista, con su `.procedencia.json`, e índice regenerado entero. Lista
-blanca cerrada: de cada indicio solo salen la zona y la ficha pública de #16. Sin
-simplificación (las zonas son trozos de trazados ya publicados). Todo o nada, y nunca
-borra lo publicado. Última barrera: si algún texto casa con la forma de una referencia
-catastral o de un localizador de parcela, no se escribe nada.
+blanca cerrada: de cada indicio solo salen la zona, la ficha pública de #16 y su tabla de
+convergencia de fuentes (`convergencia`, #316). Sin simplificación (las zonas son trozos
+de trazados ya publicados). Todo o nada, y nunca borra lo publicado. Un fichero por
+encima del umbral de peso no se escribe (ADR 0057 §8). Última barrera: si algún texto del
+fichero, su `.procedencia.json`, el índice o su procedencia casa con la forma de una
+referencia catastral o de un localizador de parcela, o lleva una palabra vetada, no se
+escribe nada; antes, cada tabla pasa `check_published_convergence`.
 """
 
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from parcel_intel.adapters.published_layers.convergence import (
+    convergence_document,
+    convergence_sidecar,
+)
 from parcel_intel.adapters.published_layers.geojson_sink import (
     DEFAULT_SIZE_THRESHOLD_BYTES,
     dump_compact,
@@ -32,7 +39,11 @@ from parcel_intel.adapters.published_layers.index import (
 from parcel_intel.adapters.published_layers.projection import DECIMALS, SOURCE_CRS, TARGET_CRS
 from parcel_intel.adapters.road_layer_files.common import write_atomic
 from parcel_intel.domain.provenance import Provenance, Redistribution
-from parcel_intel.domain.public_card import WARNING, PublicSource
+from parcel_intel.domain.public_card import WARNING, PublicSource, banned_words_in
+from parcel_intel.domain.published_convergence import (
+    ConvergenceNotPublishableError,
+    check_published_convergence,
+)
 from parcel_intel.domain.published_discrepancy import (
     CADASTRAL_REFERENCE_RE,
     DISCREPANCY_LAYER_ID,
@@ -81,6 +92,7 @@ def _feature(item: PublishedDiscrepancy) -> dict[str, object]:
             "criterio": card.criterion,
             "descripcion_criterio": card.criterion_description,
             "aviso_omision": card.omission_notice,
+            "convergencia": convergence_document(item.convergence),
         },
     }
 
@@ -107,7 +119,12 @@ def layer_provenance(publication: DiscrepancyLayerPublication, repository_url: s
 
 
 def _attributions(publication: DiscrepancyLayerPublication) -> list[str]:
-    return sorted({source.attribution for source in _sources(publication) if source.attribution})
+    """Las de las fichas y las de las filas de la tabla de convergencia (todas de la lista
+    cerrada `ROW_ATTRIBUTIONS`), ordenadas y sin repetir."""
+    found = {source.attribution for source in _sources(publication) if source.attribution}
+    for _, attributions, _ in publication.convergence_notes.sources:
+        found.update(attributions)
+    return sorted(found)
 
 
 def layer_document(
@@ -152,6 +169,7 @@ def sidecar_document(
             }
             for origin, url, retrieved_at, license, attribution in sorted(sources)
         ],
+        "convergencia": convergence_sidecar(publication.convergence_notes),
         "transformacion": {
             "crs_origen": SOURCE_CRS,
             "crs_destino": TARGET_CRS,
@@ -171,6 +189,16 @@ def check_no_parcel_identifiers(label: str, text: str) -> None:
                 f"{label}: contiene algo con forma de referencia o localizador de parcela "
                 f"({match.group(0)!r}); no se publica nada"
             )
+
+
+def check_no_banned_words(label: str, text: str) -> None:
+    """Última barrera de los sinks de #170 y #316: `PublishedLayerError` si `text` lleva
+    una palabra vetada de la lista de #16."""
+    found = banned_words_in(text)
+    if found:
+        raise PublishedLayerError(
+            f"{label}: contiene palabras vetadas ({', '.join(found)}); no se publica nada"
+        )
 
 
 @dataclass(frozen=True)
@@ -206,6 +234,12 @@ class GeoJsonPublishedDiscrepancySink:
         index, index_provenance = build_index(entries, self._repository_url)
         index_text = dump_compact(index)
         index_provenance_text = dump_provenance(index_provenance)
+        for label, text in (
+            (INDEX_FILENAME, index_text),
+            (INDEX_FILENAME + PROVENANCE_SUFFIX, index_provenance_text),
+        ):
+            check_no_parcel_identifiers(label, text)
+            check_no_banned_words(label, text)
 
         for item in serialized:
             relative = Path(item.file.path)
@@ -219,13 +253,26 @@ class GeoJsonPublishedDiscrepancySink:
     def _serialize(self, publication: DiscrepancyLayerPublication) -> _Serialized:
         code = publication.municipality_code
         label = f"{DISCREPANCY_LAYER_ID}/{code}"
+        for item in publication.content.items:
+            try:
+                check_published_convergence(item.convergence)
+            except ConvergenceNotPublishableError as error:
+                raise PublishedLayerError(
+                    f"{label}: tabla de convergencia: {error.reason}"
+                ) from error
         provenance = layer_provenance(publication, self._repository_url)
         document = layer_document(publication, provenance)
         text = dump_compact(document)
         sidecar = dump_provenance(sidecar_document(publication, provenance))
-        check_no_parcel_identifiers(label, text)
-        check_no_parcel_identifiers(label + PROVENANCE_SUFFIX, sidecar)
+        for name, content in ((label, text), (label + PROVENANCE_SUFFIX, sidecar)):
+            check_no_parcel_identifiers(name, content)
+            check_no_banned_words(name, content)
         size = len(text.encode("utf-8"))
+        if size > self._threshold:
+            raise PublishedLayerError(
+                f"{label}: pesa {size} bytes, por encima del umbral de {self._threshold}; "
+                "no se publica nada"
+            )
         try:
             entry = entry_from_document(DISCREPANCY_LAYER_ID, code, document)
         except PublishedLayerError as error:
@@ -237,7 +284,7 @@ class GeoJsonPublishedDiscrepancySink:
                 path=f"{DISCREPANCY_LAYER_ID}/{code}.geojson",
                 size_bytes=size,
                 simplification=None,
-                over_threshold=size > self._threshold,
+                over_threshold=False,  # por encima del umbral falla (ADR 0049 §7, ADR 0057 §8)
             ),
             text=text,
             sidecar=sidecar,

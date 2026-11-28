@@ -23,6 +23,7 @@ from parcel_intel.cli.main import AMBITO_HITO_INE
 from parcel_intel.domain.public_card import BANNED_WORDS, WARNING, banned_words_in
 from parcel_intel.domain.published_discrepancy import CADASTRAL_REFERENCE_RE
 from tests.acceptance.test_historia_94 import EVIDENCE_KEYS, FEATURE_KEYS
+from tests.indicio_publication_support import indicio_publication_options
 
 pytestmark = pytest.mark.acceptance
 
@@ -184,9 +185,14 @@ def test_ca1_ambito_publica_un_fichero_por_municipio_con_indicios(
         pytest.skip("data/derived/ no existe en este entorno; se regenera con `discrepancias`")
     # Reproducible desde `data/derived/`: los bytes publicados son los del repo.
     destino = tmp_path / "datos"
+    # Desde #316: el interno real, el manifiesto de indicios (productor real con red falsa,
+    # en `tmp_path`), las capas reales y un `curated/historico/` vacío (CA10 de #316).
+    opciones = indicio_publication_options(
+        DERIVED_PUBLICABLE, DERIVED_PUBLICABLE.parents[1], work=tmp_path
+    )
     assert _run(
         ["publicar-discrepancias", "--ambito", "--entrada", str(DERIVED_PUBLICABLE)]
-        + ["--salida", str(destino)]
+        + ["--salida", str(destino), *opciones]
     ) == 0
     out = capsys.readouterr().out
     for ine in CON_INDICIOS:

@@ -1471,17 +1471,33 @@ def _publicar_capas(args: argparse.Namespace) -> int:
 
 def build_publish_discrepancies_use_case(
     input_dir: Path,
+    internal_dir: Path,
+    comparison_dir: Path,
     output_dir: Path,
+    derived_dir: Path,
+    historic: HistoricCoverageSource,
+    appears_min_fraction: float = APPEARS_MIN_FRACTION,
     size_threshold_bytes: int = PUBLISH_SIZE_THRESHOLD_BYTES,
 ) -> PublishDiscrepanciesUseCase:
-    """Composition root de `publicar-discrepancias` (historia #94, ADR 0044).
+    """Composition root de `publicar-discrepancias` (historias #94 y #316, ADR 0044 y 0057).
 
-    Lee el fichero publicable de `discrepancias` en `input_dir` y escribe en
-    `output_dir` (normalmente `site/datos`). Sin red ni LLM."""
+    Lee el fichero publicable de `discrepancias` en `input_dir`, el interno casado en
+    `internal_dir`, el manifiesto de `imagenes-comparacion-indicios` en `comparison_dir`,
+    las capas derivadas de `derived_dir` y la cobertura histórica de `historic`, y escribe
+    en `output_dir` (normalmente `site/datos`). Sin red ni LLM."""
     return PublishDiscrepanciesUseCase(
         reports=GeoJsonDiscrepancyReportReader(input_dir),
         sink=GeoJsonPublishedDiscrepancySink(
             output_dir, REPOSITORY_URL, size_threshold_bytes=size_threshold_bytes
+        ),
+        internal_reports=GeoJsonDiscrepancyReportReader(internal_dir),
+        convergence=BuildConvergenceTablesUseCase(
+            layers=_trail_layer_reader(derived_dir),
+            historic=historic,
+            comparisons=JsonComparisonManifestReader(comparison_dir),
+            appears_min_fraction=appears_min_fraction,
+            # Un indicio demasiado largo sale sin filas de ortofoto (ADR 0057 §4).
+            without_images_if_too_long=True,
         ),
     )
 
@@ -1497,12 +1513,26 @@ def _format_omitted(omitted: OmittedByLicense) -> str:
 
 
 def _publicar_discrepancias(args: argparse.Namespace) -> int:
+    try:
+        threshold = check_appears_min_fraction(args.umbral_aparece)
+    except ValueError:
+        print("ERROR --umbral-aparece: debe estar en (0, 1]", file=sys.stderr)
+        return 1
     codes: list[str] = list(AMBITO_HITO_INE) if args.ambito else []
     codes.extend(code for code in args.municipio if code not in codes)
     if not codes:
         print("Indica --municipio <INE> (repetible) o --ambito.", file=sys.stderr)
         return 2
-    use_case = build_publish_discrepancies_use_case(args.entrada, args.salida)
+    historic = build_historic_coverage_source(args.curated_historico, args.cache_historico)
+    use_case = build_publish_discrepancies_use_case(
+        args.entrada,
+        args.interno,
+        args.comparacion,
+        args.salida,
+        args.capas,
+        historic,
+        appears_min_fraction=threshold,
+    )
     try:
         result = use_case.execute(codes)
     except DiscrepancyFileFormatError as error:
@@ -1513,6 +1543,10 @@ def _publicar_discrepancias(args: argparse.Namespace) -> int:
         print(f"ERROR al publicar: {error}", file=sys.stderr)
         print(f"No se ha escrito nada en {args.salida}.", file=sys.stderr)
         return 1
+    finally:
+        # Unidades históricas con veredicto negativo: trabajo en curso, no un fallo (#315).
+        for unit_id, reasons in historic.skipped_units():
+            print(f"unidad histórica omitida {unit_id}: {'; '.join(reasons)}")
     for failure in result.failures:
         print(f"ERROR {failure.municipality_code}: {failure.reason}", file=sys.stderr)
     if result.failures:
@@ -1537,8 +1571,6 @@ def _publicar_discrepancias(args: argparse.Namespace) -> int:
             f"{total} indicios ({summary}); "
             f"{_format_omitted(omitted[published.municipality_code])}"
         )
-        if published.over_threshold:
-            print("  AVISO: por encima del umbral de peso (ver #96)")
     return 0
 
 
@@ -2491,6 +2523,44 @@ def _build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=Path("site/datos"),
         help="Directorio publicado del sitio",
+    )
+    indicios_parser.add_argument(
+        "--interno",
+        type=Path,
+        default=Path("data/derived/discrepancias/interno"),
+        help="Directorio con los ficheros internos de `discrepancias` (nunca se publican)",
+    )
+    indicios_parser.add_argument(
+        "--comparacion",
+        type=Path,
+        default=Path("data/derived/comparacion_indicios"),
+        help="Directorio con los manifiestos <ine>.json de `imagenes-comparacion-indicios`",
+    )
+    indicios_parser.add_argument(
+        "--capas",
+        type=Path,
+        default=Path("data/derived"),
+        help="Capas derivadas de la tabla de convergencia (vias_pecuarias, camino_actual, "
+        "camino_asfaltado, catastro_caminos)",
+    )
+    indicios_parser.add_argument(
+        "--curated-historico",
+        type=Path,
+        default=Path("curated/historico"),
+        help="Unidades históricas georreferenciadas (entrada humana versionada)",
+    )
+    indicios_parser.add_argument(
+        "--cache-historico",
+        type=Path,
+        default=Path("data/raw/ign_planimetrias"),
+        help="Caché de las imágenes de trabajo de las unidades históricas (sin red)",
+    )
+    indicios_parser.add_argument(
+        "--umbral-aparece",
+        # Sin validar aquí: argparse saldría con 2 y el criterio pide 1 (#315, #316).
+        type=float,
+        default=APPEARS_MIN_FRACTION,
+        help="Fracción mínima del tramo para «Aparece», en (0, 1] (por defecto 0,5)",
     )
     indicios_parser.set_defaults(func=_publicar_discrepancias)
 

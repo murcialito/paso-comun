@@ -34,9 +34,9 @@ from parcel_intel.domain.convergence import (
 )
 from parcel_intel.domain.discrepancy_criterion import CriterionRef
 from parcel_intel.domain.historic_coverage import HISTORIC_SOURCE_KIND
+from parcel_intel.domain.parcel_identifiers import CADASTRAL_REFERENCE_RE, PARCEL_LOCATOR_RE
 from parcel_intel.domain.public_card import CATASTRO_ATTRIBUTION, SOURCE_POLICY
 from parcel_intel.domain.published_comparison import NOT_AVAILABLE_TEXT
-from parcel_intel.domain.published_discrepancy import CADASTRAL_REFERENCE_RE, PARCEL_LOCATOR_RE
 
 IGN_NETWORK_NOTE = "sin asfaltar y asfaltada (ADR 0050)"
 """Red del IGN de la fila «Camino actual (IGN)»: la misma unión que la contraparte de los
